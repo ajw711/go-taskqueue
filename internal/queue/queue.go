@@ -24,12 +24,8 @@ func (q *Queue) Submit(j *job.Job) error {
 	if j == nil {
 		return ErrNilJob
 	}
-	select {
-	case q.jobs <- j:
-		return nil
-	default:
-		return ErrQueueFull
-	}
+	q.jobs <- j
+	return nil
 }
 
 func (q *Queue) Start() {
