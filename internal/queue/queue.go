@@ -1,11 +1,13 @@
 package queue
 
 import (
+	"fmt"
 	"go-taskqueue/internal/job"
 )
 
 type Queue struct {
-	jobs        chan *job.Job
+	highJobs chan *job.Job
+	normalJobs chan *job.Job
 	processor   func(*job.Job) error
 	workerCount int
 }
@@ -13,7 +15,8 @@ type Queue struct {
 func NewQueue(workerCount int, processor func(*job.Job) error) *Queue {
 
 	queue := &Queue{
-		jobs:        make(chan *job.Job, workerCount*10),
+		highJobs: make(chan *job.Job, workerCount*10),
+		normalJobs:        make(chan *job.Job, workerCount*10),
 		processor:   processor,
 		workerCount: workerCount,
 	}
@@ -24,7 +27,11 @@ func (q *Queue) Submit(j *job.Job) error {
 	if j == nil {
 		return ErrNilJob
 	}
-	q.jobs <- j
+	if j.Priority == job.PriorityHigh {
+		q.highJobs <- j
+	} else {
+		q.normalJobs <- j
+	}
 	return nil
 }
 
@@ -35,14 +42,32 @@ func (q *Queue) Start() {
 }
 
 func (q *Queue) worker(workerId int) {
-	for j := range q.jobs {
-		j.MarkProcessing()
+	for {
+		var j *job.Job
 
-		err := q.processor(j)
-		if err != nil {
-			j.MarkFailed(err)
-		} else {
-			j.MarkCompleted()
+		select {
+		case j = <-q.highJobs:
+			q.handle(j, workerId)
+			continue
+		default:
 		}
+
+		select {
+		case j = <-q.highJobs:
+			q.handle(j, workerId)
+		case j = <-q.normalJobs:
+			q.handle(j, workerId)
+		}
+	}
+}
+
+func (q *Queue) handle(j *job.Job, workerId int) {
+	fmt.Printf("[worker-%d] 처리 시작: %s (priority=%s)\n", workerId, j.ID, j.Priority)
+	j.MarkProcessing()
+	err := q.processor(j)
+	if err != nil {
+		j.MarkFailed(err)
+	} else {
+		j.MarkCompleted()
 	}
 }

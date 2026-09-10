@@ -26,7 +26,7 @@ func TestQueue_ProcessesJobsConcurrently(t *testing.T) {
 		t.Fatalf("Submit 실패: %v", err)
 	}
 
-	j2, err := job.NewJob("job-2", "email:send", "{}", job.PriorityHigh, 5)
+	j2, err := job.NewJob("job-2", "email:send", "{}", job.PriorityNormal, 5)
 	if err != nil {
 		t.Fatalf("NewJob 생성 실패: %v", err)
 	}
@@ -53,4 +53,33 @@ func TestQueue_ProcessesJobsConcurrently(t *testing.T) {
 	if j3.Status != job.StatusCompleted {
 		t.Errorf("기대한 상태는 %s인데 실제는 %s", job.StatusCompleted, j3.Status)
 	}
+}
+
+func TestQueue_PriorityJobsProcessedFirst(t *testing.T) {
+	processedOrder := []string{}
+
+	processor := func(j *job.Job) error {
+		time.Sleep(100 * time.Millisecond)
+		processedOrder = append(processedOrder, j.ID)
+		fmt.Printf("처리 완료: %s (priority=%s)\n", j.ID, j.Priority)
+		return nil
+	}
+
+	q := NewQueue(1, processor) // 워커 1개로 경쟁 상황 강제
+	q.Start()
+
+	for i :=1; i <= 3; i++ {
+		j, _ := job.NewJob(fmt.Sprintf("normal-%d", i), "email:send", "{}", job.PriorityNormal, 5)
+		q.Submit(j)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// noraml 다음으로 high 등록
+	highJob, _:= job.NewJob("high-1", "email:send", "{}", job.PriorityHigh, 5)
+	q.Submit(highJob)
+
+	time.Sleep(1 * time.Second) // 모든 작업이 끝날 때까지 충분히 대기
+	// [normal-1, high-1, normal-2, normal-3]처럼 나와야함
+	fmt.Print("처리 순서: ",processedOrder)
 }
