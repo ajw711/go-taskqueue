@@ -106,3 +106,12 @@ func (j *Job) MarkFailed(err error) {
 	j.UpdatedAt = time.Now()
 	j.CurrentAttempt++
 }
+
+func (j *Job) MarkDead() {
+	j.Status = StatusDead
+	j.UpdatedAt = time.Now()
+}
+
+func (j *Job) IsExhausted() bool {
+	return j.CurrentAttempt >= j.MaxAttempts
+}

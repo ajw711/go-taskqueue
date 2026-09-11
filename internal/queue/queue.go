@@ -2,7 +2,9 @@ package queue
 
 import (
 	"fmt"
+	"go-taskqueue/internal/dlq"
 	"go-taskqueue/internal/job"
+	"time"
 )
 
 type Queue struct {
@@ -10,6 +12,7 @@ type Queue struct {
 	normalJobs chan *job.Job
 	processor   func(*job.Job) error
 	workerCount int
+	dlq *dlq.DLQ
 }
 
 func NewQueue(workerCount int, processor func(*job.Job) error) *Queue {
@@ -19,6 +22,7 @@ func NewQueue(workerCount int, processor func(*job.Job) error) *Queue {
 		normalJobs:        make(chan *job.Job, workerCount*10),
 		processor:   processor,
 		workerCount: workerCount,
+		dlq: dlq.NewDLQ(),
 	}
 	return queue
 }
@@ -65,9 +69,20 @@ func (q *Queue) handle(j *job.Job, workerId int) {
 	fmt.Printf("[worker-%d] 처리 시작: %s (priority=%s)\n", workerId, j.ID, j.Priority)
 	j.MarkProcessing()
 	err := q.processor(j)
-	if err != nil {
-		j.MarkFailed(err)
-	} else {
+	if err == nil {
 		j.MarkCompleted()
+		return
 	}
+
+	j.MarkFailed(err)
+
+	if j.IsExhausted() {
+		j.MarkDead()
+		q.dlq.Add(j)
+		return
+	}
+	backoff := time.Duration(j.CurrentAttempt) * 2 * time.Second
+	time.AfterFunc(backoff,func() {
+		q.Submit(j)
+	})
 }
