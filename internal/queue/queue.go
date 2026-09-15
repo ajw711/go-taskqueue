@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-taskqueue/internal/dlq"
 	"go-taskqueue/internal/job"
+	"go-taskqueue/internal/store"
 	"time"
 )
 
@@ -13,6 +14,7 @@ type Queue struct {
 	processor   func(*job.Job) error
 	workerCount int
 	dlq *dlq.DLQ
+	store *store.Store
 }
 
 func NewQueue(workerCount int, processor func(*job.Job) error) *Queue {
@@ -23,6 +25,7 @@ func NewQueue(workerCount int, processor func(*job.Job) error) *Queue {
 		processor:   processor,
 		workerCount: workerCount,
 		dlq: dlq.NewDLQ(),
+		store: store.NewStore(),
 	}
 	return queue
 }
@@ -31,6 +34,7 @@ func (q *Queue) Submit(j *job.Job) error {
 	if j == nil {
 		return ErrNilJob
 	}
+	q.store.Save(j)
 	if j.Priority == job.PriorityHigh {
 		q.highJobs <- j
 	} else {
@@ -85,4 +89,12 @@ func (q *Queue) handle(j *job.Job, workerId int) {
 	time.AfterFunc(backoff,func() {
 		q.Submit(j)
 	})
+}
+
+func (q *Queue) GetJob(id string) (*job.Job, bool) {
+	return q.store.Get(id)
+}
+
+func (q *Queue) ListDeadLetters() []*job.Job {
+	return q.dlq.List()
 }

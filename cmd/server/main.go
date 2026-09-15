@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"go-taskqueue/internal/handler"
 	"go-taskqueue/internal/job"
 	"go-taskqueue/internal/queue"
-	"time"
 )
 
 func main() {
@@ -20,21 +24,14 @@ func main() {
 	q.Start()
 	fmt.Println("=== TaskQueue 워커 3명 가동 시작 ===")
 
-	for i := 1; i <= 6; i++ {
-		j, _ := job.NewJob(
-			fmt.Sprintf("job-%d", i),
-			"email:send",
-			fmt.Sprintf("user%d@test.com", i),
-			job.PriorityNormal,
-			3,
-		)
-		err := q.Submit(j)
-		if err != nil {
-			return
-		}
-	}
+	h := handler.NewHandler(q)
 
-	time.Sleep(3 * time.Second)
-	fmt.Println("=== 모든 작업 처리 종료 ===")
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /jobs", h.SubmitJob)
+	mux.HandleFunc("GET /jobs/{id}", h.GetJob)
+	mux.HandleFunc("GET /dead-letters", h.DeadLetters)
+
+	fmt.Println("서버 시작: http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
 
 }
