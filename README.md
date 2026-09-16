@@ -74,7 +74,7 @@ go run ./cmd/server
 - `job`: 생성/검증/상태전이/직렬화
 - `queue`: 워커 풀 동시 처리, 우선순위 처리 순서, 재시도 및 DLQ 격리
 
-**별도 클라이언트를 통한 통합 테스트** ([go-taskqueue-client](https://github.com/<github계정>/go-taskqueue-client), 별도 저장소/별도 Go 모듈)
+**별도 클라이언트를 통한 통합 테스트** ([go-taskqueue-client](https://github.com/ajw711/go-taskqueue-client), 별도 저장소/별도 Go 모듈)
 서버의 `internal` 패키지를 참조하지 않고, 순수 HTTP 통신만으로 서버와 통신하는 독립 프로그램으로 작성했습니다.
 
 - 단일 작업 등록 → 상태 조회 (pending → processing → completed 전이 로그를 기록했습니다)
